@@ -11,22 +11,31 @@ def to_canvas_coords(canvas, x):
     width = canvas.winfo_reqwidth()
     vector = height/20*x
     vector = Vec(vector.x, -vector.y)
-    return vector + Vec(height/2, width/2)
+    return vector + Vec(width/2, height/2)
 
 def move_oval_to(o, u1, u2):
     v1=to_canvas_coords(canvas, u1)
     v2=to_canvas_coords(canvas, u2)
-
     canvas.coords(o,v1.x,v1.y,v2.x,v2.y)
 
 def create_oval(canvas, particle):
     oval = canvas.create_oval(0, 0, particle.radius, particle.radius, fill="blue")
-    u1, u2 = particle.boundin_box()
+    u1, u2 = particle.bounding_box()
     move_oval_to(oval, u1, u2)
 
-# test
-for n in range(5):
-  particle = Particle(0, Vec(n,n), Vec(0,0), 0.2)
-  create_oval(canvas, particle)
-  canvas.update()
-  time.sleep(1)
+
+
+def simulation_loop(f, timestep, particles):
+    partovals = {}
+    for p in particles:
+        partovals[p] = create_oval(canvas, p)
+    
+    while True:
+        f(timestep, particles)
+        for p in particles:
+            p.inertial_move(timestep)
+            u1, u2 = p.bounding_box()
+            move_oval_to(partovals[p], u1, u2)
+        canvas.update()
+
+    
