@@ -1,5 +1,6 @@
 from tkinter import *
 from model import *
+from math import *
 import time
 
 root = Tk()
@@ -41,5 +42,3 @@ def simulation_loop(f, timestep, particles):
                 move_oval_to(partovals[p], u1, u2)
             past = time.time()
             canvas.update()
-
-    

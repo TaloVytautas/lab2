@@ -38,3 +38,70 @@ class Particle:
         return (topl,botr)
 
 
+def constant_gravitational_field(dt, particles, g=10):
+    d = Vec(0, -1)
+    for p in particles:
+        p.apply_force(dt, g*p.mass*d)
+
+def gravitational_force(dt, particles, G=150):
+    for p1 in particles:
+        fsum=Vec(0,0)
+        for p2 in particles:
+            dire=(p2.position-p1.position)
+            r=dire.norm()
+            if r==0:
+                continue
+            F2=G*p1.mass*p2.mass/r**3*dire
+            fsum+=F2
+        p1.apply_force(dt, fsum)
+
+def vanderwaals_force(dt, particles, A=100):
+    for p1 in particles:
+        fsum=Vec(0,0)
+        for p2 in particles:
+            dire=(p2.position-p1.position)
+            r=dire.norm()
+            R1 = p1.radius
+            R2 = p2.radius
+            if r==0:
+                continue
+            F2=A*R1*R2/((R1+R2)*6*r**3)*dire
+            fsum+=F2
+        p1.apply_force(dt, fsum)
+
+def collision(dt, particles, k=1000000):
+    for p1 in particles:
+        fsum=Vec(0,0)
+        for p2 in particles:
+            dire=(p2.position-p1.position)
+            R1 = p1.radius
+            R2 = p2.radius
+            r=dire.norm()
+            if r > R1+R2:
+                continue
+            if r==0:
+                continue
+            F2=-k*(R1+R2-r)/r*dire
+            fsum+=F2
+        p1.apply_force(dt, fsum)
+
+
+def wall_force(dt, particles, k, n, a):
+    for p in particles:
+        d = dot((p.position - a), n)
+        if d < 0:
+            p.apply_force(dt,-k*d*n)
+
+def friction(dt, particles, friction=0.5):
+    for p in particles:
+        p.apply_force(dt,-friction*p.velocity)
+
+def drag(dt, particles, drag=0.01):
+    for p in particles:
+        p.apply_force(dt,-drag*p.velocity.norm()*p.velocity)
+
+def circular_arena(dt, particles, k=1000, R=10):
+    for p in particles:
+        r = p.position.norm()
+        if R <= r:
+            p.apply_force(dt, k*(R-r)/r*p.position)
