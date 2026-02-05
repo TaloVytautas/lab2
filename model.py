@@ -16,6 +16,7 @@ class Vec:
         return math.sqrt(self.x**2 + self.y**2)
     def get_coords(self):
         return (self.x, self.y)
+    
 
 def dot(u, v):
     vector1 = u.get_coords()
@@ -37,54 +38,79 @@ class Particle:
         botr=Vec(self.position.x+self.radius,self.position.y-self.radius)
         return (topl,botr)
 
-
 def constant_gravitational_field(dt, particles, g=10):
     d = Vec(0, -1)
     for p in particles:
         p.apply_force(dt, g*p.mass*d)
 
 def gravitational_force(dt, particles, G=150):
-    for p1 in particles:
-        fsum=Vec(0,0)
-        for p2 in particles:
-            dire=(p2.position-p1.position)
+    n = len(particles)
+    forces = [Vec(0,0) for _ in range(n)]
+
+    for i in range(n):
+        p1 = particles[i]
+        p1_pos = p1.position
+        p1_mass = p1.mass
+        for j in range(i+1,n):
+            p2 = particles[j]
+            p2_pos = p2.position
+            p2_mass = p2.mass
+            dire=(p2_pos-p1_pos)
             r=dire.norm()
-            if r==0:
-                continue
-            F2=G*p1.mass*p2.mass/r**3*dire
-            fsum+=F2
-        p1.apply_force(dt, fsum)
+            inv_r3 = 1/(r*r*r)
+            f=G*p1_mass*p2_mass*inv_r3*dire
+            forces[i] += f
+            forces[j] -= f
+    
+    for p, f in zip(particles, forces):
+        p.apply_force(dt,f)
 
 def vanderwaals_force(dt, particles, A=100):
-    for p1 in particles:
-        fsum=Vec(0,0)
-        for p2 in particles:
-            dire=(p2.position-p1.position)
-            r=dire.norm()
-            R1 = p1.radius
+    n = len(particles)
+    forces = [Vec(0,0) for _ in range(n)]
+
+    for i in range(n):
+        p1 = particles[i]
+        p1_pos = p1.position
+        R1 = p1.radius
+        for j in range(i+1,n):
+            p2 = particles[j]
+            p2_pos = p2.position
             R2 = p2.radius
-            if r==0:
-                continue
-            F2=A*R1*R2/((R1+R2)*6*r**3)*dire
-            fsum+=F2
-        p1.apply_force(dt, fsum)
+            dire=(p2_pos-p1_pos)
+            r=dire.norm()
+            inv_r3 = 1/(r*r*r*6*(R1+R2))
+            f=A*R1*R2*inv_r3*dire
+            forces[i] += f
+            forces[j] -= f
+    
+    for p, f in zip(particles, forces):
+        p.apply_force(dt,f)
+
 
 def collision(dt, particles, k=1000000):
-    for p1 in particles:
-        fsum=Vec(0,0)
-        for p2 in particles:
-            dire=(p2.position-p1.position)
-            R1 = p1.radius
+    n = len(particles)
+    forces = [Vec(0,0) for _ in range(n)]
+
+    for i in range(n):
+        p1 = particles[i]
+        p1_pos = p1.position
+        R1 = p1.radius
+        for j in range(i+1,n):
+            p2 = particles[j]
+            p2_pos = p2.position
             R2 = p2.radius
+            dire=(p2_pos-p1_pos)
             r=dire.norm()
             if r > R1+R2:
                 continue
-            if r==0:
-                continue
-            F2=-k*(R1+R2-r)/r*dire
-            fsum+=F2
-        p1.apply_force(dt, fsum)
-
+            inv_r = 1/r
+            f=k*(R1+R2-r)*inv_r*dire
+            forces[i] -= f
+            forces[j] += f
+    
+    for p, f in zip(particles, forces):
+        p.apply_force(dt,f)
 
 def wall_force(dt, particles, k, n, a):
     for p in particles:
