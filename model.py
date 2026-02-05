@@ -16,7 +16,6 @@ class Vec:
         return math.sqrt(self.x**2 + self.y**2)
     def get_coords(self):
         return (self.x, self.y)
-    
 
 def dot(u, v):
     vector1 = u.get_coords()

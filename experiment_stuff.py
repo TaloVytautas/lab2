@@ -15,7 +15,7 @@ def combined_walls(dt, particles):
     wall_force(dt, particles, k=10, n=Vec(-1, 0), a=Vec(4,0))
     wall_force(dt, particles, k=10, n=Vec(0, -1), a=Vec(0,4))
 
-def combined_forces(dt, particles, forces=[constant_gravitational_field, combined_walls, collision]):
+def combined_forces(dt, particles, forces=[constant_gravitational_field, combined_walls]):
     for f in forces:
         f(dt, particles)
 
