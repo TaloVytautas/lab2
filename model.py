@@ -1,4 +1,4 @@
-import math
+from math import *
 
 class Vec:
     def __init__(self, x, y):
@@ -13,7 +13,7 @@ class Vec:
     def __sub__(self, other):
         return Vec(self.x-other.x, self.y-other.y)
     def norm(self):
-        return math.sqrt(self.x**2 + self.y**2)
+        return sqrt(self.x**2 + self.y**2)
     def get_coords(self):
         return (self.x, self.y)
 
@@ -28,6 +28,7 @@ class Particle:
         self.position = position
         self.velocity = velocity
         self.radius = radius
+        self.charge = 0
     def inertial_move(self, dt):
         self.position += dt*self.velocity
     def apply_force(self, dt, f):
@@ -36,80 +37,73 @@ class Particle:
         topl=Vec(self.position.x-self.radius,self.position.y+self.radius)
         botr=Vec(self.position.x+self.radius,self.position.y-self.radius)
         return (topl,botr)
+    def set_charge(self, new_charge):
+        self.charge = new_charge
+
+class Spring:
+    def __init__(self, particle1, particle2, l, k):
+        self.particle1 = particle1
+        self.particle2 = particle2
+        self.l = l
+        self.k = k
+    def length(self):
+        return (self.particle1.position - self.particle2.position).norm()
+    def force(self, dt):
+        dire = self.particle2.position - self.particle1.position
+        len = self.length()
+        x = (len - self.l)/len
+        f = self.k*x*dire
+        self.particle1.apply_force(dt, f)
+        self.particle2.apply_force(dt, -1*f)
 
 def constant_gravitational_field(dt, particles, g=10):
     d = Vec(0, -1)
     for p in particles:
         p.apply_force(dt, g*p.mass*d)
 
-def gravitational_force(dt, particles, G=150):
+def all_particles(dt, particles, trait, inner_fn, constant):
     n = len(particles)
     forces = [Vec(0,0) for _ in range(n)]
 
     for i in range(n):
         p1 = particles[i]
         p1_pos = p1.position
-        p1_mass = p1.mass
+        V1 = getattr(p1, trait)
         for j in range(i+1,n):
             p2 = particles[j]
             p2_pos = p2.position
-            p2_mass = p2.mass
+            V2 = getattr(p2, trait)
             dire=(p2_pos-p1_pos)
             r=dire.norm()
-            inv_r3 = 1/(r*r*r)
-            f=G*p1_mass*p2_mass*inv_r3*dire
+            f=inner_fn(dire, r, V1, V2, constant)
             forces[i] += f
             forces[j] -= f
     
     for p, f in zip(particles, forces):
         p.apply_force(dt,f)
+
+def gravity_inner(dire, r, p1_mass, p2_mass, G):
+    inv_r3 = 1/(r*r*r+1e-6)
+    return G*p1_mass*p2_mass*inv_r3*dire
+
+def gravitational_force(dt, particles, G=150):
+    all_particles(dt, particles, "mass", gravity_inner, G)
+
+def vanderwaals_inner(dire, r, R1, R2, A):
+    inv_r3 = 1/(r*r*r*6*(R1+R2)+1e-6)
+    return A*R1*R2*inv_r3*dire
 
 def vanderwaals_force(dt, particles, A=100):
-    n = len(particles)
-    forces = [Vec(0,0) for _ in range(n)]
+    all_particles(dt, particles, "radius", vanderwaals_inner, A)
 
-    for i in range(n):
-        p1 = particles[i]
-        p1_pos = p1.position
-        R1 = p1.radius
-        for j in range(i+1,n):
-            p2 = particles[j]
-            p2_pos = p2.position
-            R2 = p2.radius
-            dire=(p2_pos-p1_pos)
-            r=dire.norm()
-            inv_r3 = 1/(r*r*r*6*(R1+R2))
-            f=A*R1*R2*inv_r3*dire
-            forces[i] += f
-            forces[j] -= f
-    
-    for p, f in zip(particles, forces):
-        p.apply_force(dt,f)
-
+def collision_inner(dire, r, R1, R2, k):
+    if r > R1+R2:
+        return Vec(0,0)
+    inv_r = 1/(r+1e-6)
+    return -k*(R1+R2-r)*inv_r*dire
 
 def collision(dt, particles, k=1000000):
-    n = len(particles)
-    forces = [Vec(0,0) for _ in range(n)]
-
-    for i in range(n):
-        p1 = particles[i]
-        p1_pos = p1.position
-        R1 = p1.radius
-        for j in range(i+1,n):
-            p2 = particles[j]
-            p2_pos = p2.position
-            R2 = p2.radius
-            dire=(p2_pos-p1_pos)
-            r=dire.norm()
-            if r > R1+R2:
-                continue
-            inv_r = 1/r
-            f=k*(R1+R2-r)*inv_r*dire
-            forces[i] -= f
-            forces[j] += f
-    
-    for p, f in zip(particles, forces):
-        p.apply_force(dt,f)
+    all_particles(dt, particles, "radius", collision_inner, k)
 
 def wall_force(dt, particles, k, n, a):
     for p in particles:
@@ -130,3 +124,17 @@ def circular_arena(dt, particles, k=1000, R=10):
         r = p.position.norm()
         if R <= r:
             p.apply_force(dt, k*(R-r)/r*p.position)
+
+#Coloumb kraft ekvationen är väldigt lik gravitationen men med en annan konstant och med repulsion med två positiva massor/laddningar så bass ekvationen är negativ
+def coulomb_force(dt, particles, k=100):
+    all_particles(dt, particles, "charge", gravity_inner, -k)
+
+def electromagnetic_field(dt, particles, B, mu):
+    for p in particles:
+        vx, vy = p.velocity.get_coords()
+        pF = Vec(vy, -vx)
+        p.apply_force(dt, mu*B*p.charge*pF)
+
+def spring_force(dt, springs):
+    for s in springs:
+        s.force(dt)
