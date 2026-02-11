@@ -129,7 +129,7 @@ def circular_arena(dt, particles, k=1000, R=10):
 def coulomb_force(dt, particles, k=100):
     all_particles(dt, particles, "charge", gravity_inner, -k)
 
-def electromagnetic_field(dt, particles, B, mu):
+def electromagnetic_field(dt, particles, B=10, mu=0.1):
     for p in particles:
         vx, vy = p.velocity.get_coords()
         pF = Vec(vy, -vx)

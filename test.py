@@ -65,7 +65,11 @@ def test_particles(fname, ps, qs, eq=lambda x, y: x==y):
         try:
             assert eq(p, q)
         except AssertionError:
-            print(f"Particle.{fname}:\n{diff(q, p)}")
+            if isinstance(q, tuple):
+                for i in q:
+                    print(f"Particle.{fname}:\n{diff(i, p)}")
+            else:
+                print(f"Particle.{fname}:\n{diff(q, p)}")
             fail_tests += 1
         else:
             pass_tests += 1
