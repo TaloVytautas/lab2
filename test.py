@@ -1,5 +1,6 @@
 import math
 import inspect
+import ast
 import tkinter as tk
 
 # Colors for nicer printouts
@@ -24,8 +25,14 @@ def print_statistics():
         print("Nothing has been implemented yet!")
     print() 
 
-def test(fun, x, y, eq=lambda x, y: x == y):
+def test(fun, x, y, eq=lambda x, y: x == y, fname=None):
     global pass_tests, fail_tests
+    if not fname:
+        fname, lpar, rpar = fun.__name__, "(", ")"
+    elif fname.endswith(","): # partially applied: f(arg1,
+        lpar, rpar = " ", ")"
+    else:
+        lpar, rpar = "(", ")"
     if type(x) == tuple:
         z = fun(*x)
     else:
@@ -33,14 +40,14 @@ def test(fun, x, y, eq=lambda x, y: x == y):
     if eq(z, y):
         pass_tests = pass_tests + 1
     else:
-        if type(x) == tuple:
-            s = repr(x)
+        if isinstance(y, (list, zip)): # membership test, not equality
+            eq_repr = "\nfound among:\n   "
         else:
-            s = "("+repr(x)+")"
+            eq_repr = "=="
+
         print("Condition failed:")
-        print("   "+fun.__name__+s+" == "+repr(y))
-        print(fun.__name__+" returned/printed:")
-        print(str(z))
+        print(f"Expected:\n    {fname}{lpar}{x}{rpar} {eq_repr} {y}")
+        print(     f"Got:\n    {fname}{lpar}{x}{rpar} == {z}")
         fail_tests = fail_tests + 1
 
 def diff(gold, user): # To print out useful diffs
@@ -65,11 +72,18 @@ def test_particles(fname, ps, qs, eq=lambda x, y: x==y):
         try:
             assert eq(p, q)
         except AssertionError:
-            if isinstance(q, tuple):
+            print(f"Particle.{fname}:", end=" ")
+            if hasattr(q, '__dict__'):
+                print()
+                print(diff(q, p))
+            elif isinstance(q, (list, tuple, zip)):
+                print(f"multiple correct answers were tried but none matched.")
+                print("Your solution should match one of the solutions below:")
+                print()
                 for i in q:
-                    print(f"Particle.{fname}:\n{diff(i, p)}")
+                    print(f"{diff(i, p)}")
             else:
-                print(f"Particle.{fname}:\n{diff(q, p)}")
+                print(f"   Expected  {p}\nto be equal to, contained among, or some other way similar to\n{q}")
             fail_tests += 1
         else:
             pass_tests += 1
@@ -146,7 +160,7 @@ def _load_modules():
     try:
         import view
     except:
-        print("The file model.py not found, or it contains syntax errors.")
+        print("The file view.py not found, or it contains syntax errors.")
         view = None
     return model, view
 
@@ -175,10 +189,33 @@ def _run_tests(model, view=None):
         return []
 
     class Vec(model.Vec):
-      """Extend the user's Vec class with custom equality"""
+      """Extend the user's Vec class with custom equality and repr"""
       def __eq__(self, other, epsilon=1e-9):
-        return math.isclose(self.x, other.x, rel_tol=epsilon) \
-           and math.isclose(self.y, other.y, rel_tol=epsilon)
+        try:
+            return math.isclose(self.x, other.x, rel_tol=epsilon) \
+            and math.isclose(self.y, other.y, rel_tol=epsilon)
+        except:
+            return False
+      
+      def __repr__(self):
+        """To produce error messages that the student can copy and paste
+        directly into a Python shell, e.g.
+
+          Expected:
+              to_canvas_coords(canvas, Vec(10,10))
+          found among:
+              [… list of accepted answers …]
+        """
+        return f"Vec({self.x},{self.y})"
+    
+      if hasattr(model.Vec, "get_coords"):
+        def get_coords(self):
+            """Better error msg if student returns a Vec instead of tuple"""
+            result = super().get_coords()
+            if isinstance(result, model.Vec):
+                return Vec(result.x, result.y)
+            else:
+                return result
     
     if hasattr(model, "dot"):
         u1 = Vec(0.123, 4.456)
@@ -191,13 +228,25 @@ def _run_tests(model, view=None):
     if hasattr(Vec, "get_coords"):
         u1 = Vec(0.123, 4.456)
         test(Vec.get_coords, u1, (0.123, 4.456))
+        if isinstance(Vec.get_coords(u1), Vec):
+            print()
+            print(f"{RED}{BOLD}The result of get_coords must be a tuple, not a Vec!{END}")
     else:
         unimplemented += 1
         print("get_coords is not implemented yet!\n")
 
-    if hasattr(Vec, "__repr__"):
+    if hasattr(model.Vec, "__repr__"):
         u1 = Vec(0.123, 4.456)
-        test(Vec.__repr__, u1, "(0.123,4.456)")
+        def repr_produces_valid_tuple(user_string, gold_tuple):
+          # rather convoluted way to ignore whitespace but ¯\_(ツ)_/¯
+          try:
+            user_tuple = ast.literal_eval(user_string)
+            return user_tuple == gold_tuple
+          except:
+            return False
+        ## NB. we test model.Vec.__repr__ here.
+        ## NOT the overwritten one. 
+        test(model.Vec.__repr__, u1, (0.123,4.456), eq=repr_produces_valid_tuple)
     else:
         unimplemented += 1
         print("__repr__ is not implemented yet!\n")
@@ -314,16 +363,54 @@ def _run_tests(model, view=None):
     particles = [Particle(1, Vec(-5,0), Vec(0,0),0.1),
                  Particle(1.1, Vec(5,0), Vec(0,0),0.1),
                  Particle(1.3, Vec(0,5), Vec(0,0),0.1)]
-
+    
     fname = "to_canvas_coords"
     if fun := getattr(view, fname, None):
         standard_canvas = tk.Canvas(tk.Tk(), width=800, height=600)
         f = lambda u : fun(standard_canvas, u)
-        # winfo_req{height,width} gives +6 to the originally defined dimensions
-        # both answers accepted: keep as is, or subtract 6
-        expected = [Vec(403,303), Vec(400,300)]
+        # winfo_req{height,width} gives +6, +4 or +2 to the originally defined dimensions
+        # accepting both approaches: keep as is, or subtract 6, 4 or 2
+        expected = [Vec(403,303), Vec(402,302), Vec(401,301), Vec(400,300)]
         elem = lambda x, xs: x in xs
-        test(f, Vec(0,0), expected, eq=elem)
+        test(f, Vec(0,0), expected, eq=elem, fname="to_canvas_coords(canvas,")
+
+        expected = [Vec(706,151.5), Vec(704,151), Vec(702.0,150.5), Vec(700, 150)]
+        test(f, Vec(10,5), expected, eq=elem, fname="to_canvas_coords(canvas,")
+
+
+    fname = "apply_force"
+    if fun := getattr(Particle, fname, None):
+        dt = 0.1
+        gold = p.new_particle_with({'velocity': Vec(1.5, 1.6)})
+        try:
+            p.apply_force(dt, Vec(5,6))
+        except Exception as e:
+            if "unsupported operand type(s) for /" in str(e):
+                print("Error in apply_force(). You probably wrote something like:")
+                print(f"  {RED}a = f / self.mass{END}")
+                print("The Vec class doesn't implement division by scalar, only multiplication.")
+                print(f"So you need to multiply the force vector by the reciprocal of the particle's mass: {BOLD}1/self.mass{END}.")
+                print("(Also remember the order: scalar * vector.)")
+            else:
+                print("apply_force() causes a runtime exception:")
+                print(f"{RED}{e}{END}")
+                print("Halting the tests.")
+            fail_tests += 1
+            print_statistics()
+            print(f"In order to run further tests, the method apply_force() must be implemented correctly.")
+            print()
+            return []
+        try:
+            assert p == gold
+        except AssertionError:
+            print(f"Particle.{fname}: {diff(gold, p)}")
+            fail_tests += 1
+        else:
+            pass_tests += 1
+    else:
+        unimplemented += 1
+        print(f"Particle.{fname} is not implemented yet!\n")
+
 
     ####################################################
     # Test the optional attributes.
@@ -477,3 +564,4 @@ if __name__ == "__main__":
         print("Implemented features:")
         for feature in implemented_features:
             print(f"- {feature}")
+    
