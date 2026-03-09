@@ -61,6 +61,8 @@ def constant_gravitational_field(dt, particles, g=10):
     for p in particles:
         p.apply_force(dt, g*p.mass*d)
 
+#I came up with some basic optimizations like not doing every calculation twice and defining variables as little as possible but couldn't be bothered to do something very clever like implimenting Barnes-Hut
+#Every interaction only requires a particles position and one trait of the particles so the helper function takes an inner function which does the math and the name of the trait and a constant which the inner function requires
 def all_particles(dt, particles, trait, inner_fn, constant):
     n = len(particles)
     forces = [Vec(0,0) for _ in range(n)]
@@ -82,6 +84,7 @@ def all_particles(dt, particles, trait, inner_fn, constant):
     for p, f in zip(particles, forces):
         p.apply_force(dt,f)
 
+#All inner functions add a small number to the divisor so that the math is accurate enough but dont end up with it dividing by almost zero in certain situations cus that causes very weird behaviour
 def gravity_inner(dire, r, p1_mass, p2_mass, G):
     inv_r3 = 1/(r*r*r+1e-6)
     return G*p1_mass*p2_mass*inv_r3*dire
@@ -102,30 +105,41 @@ def collision_inner(dire, r, R1, R2, k):
     inv_r = 1/(r+1e-6)
     return -k*(R1+R2-r)*inv_r*dire
 
+#We have picked rather large values for the defualt value of k for collisions and circular arena because the more rigid colisions are more easy to intuit
 def collision(dt, particles, k=1000000):
     all_particles(dt, particles, "radius", collision_inner, k)
 
+#The wall_force function lacks default values because it doesn't really makes sense to have any default values
 def wall_force(dt, particles, k, n, a):
     for p in particles:
         d = dot((p.position - a), n)
         if d < 0:
             p.apply_force(dt,-k*d*n)
 
-def friction(dt, particles, friction=0.5):
+def friction(dt, particles, friction_mag=0.5):
     for p in particles:
-        p.apply_force(dt,-friction*p.velocity)
+        speed = p.velocity.norm()
+        if speed < 1e-6:
+            p.velocity = 0*p.velocity
+            continue
+        direction = 1/speed*p.velocity
+        mass = getattr(p, 'mass')
+        force_to_stop = (speed * mass) / dt
+        applied_friction_mag = min(friction_mag, force_to_stop)
+        friction_force = -applied_friction_mag*direction
+        p.apply_force(dt, friction_force)
 
 def drag(dt, particles, drag=0.01):
     for p in particles:
         p.apply_force(dt,-drag*p.velocity.norm()*p.velocity)
 
-def circular_arena(dt, particles, k=1000, R=10):
+def circular_arena(dt, particles, k=1000000, R=10):
     for p in particles:
         r = p.position.norm()
         if R <= r:
             p.apply_force(dt, k*(R-r)/r*p.position)
 
-#Coloumb kraft ekvationen är väldigt lik gravitationen men med en annan konstant och med repulsion med två positiva massor/laddningar så bass ekvationen är negativ
+#The coloumb force equation is basically the same thing as the gravity equation but with a negative constant (otherwise same charges attract) and charge instead of mass
 def coulomb_force(dt, particles, k=100):
     all_particles(dt, particles, "charge", gravity_inner, -k)
 
